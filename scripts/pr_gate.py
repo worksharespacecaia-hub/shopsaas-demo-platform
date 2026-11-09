@@ -80,7 +80,9 @@ def trivy_vulns(path: str, mode: str, image: str) -> dict[tuple[str, str], float
     if not Path(path).exists():
         return {}
     if mode == "docker":
-        cmd = ["docker", "run", "--rm", "-v", f"{Path(path).resolve()}:/scan:ro", image,
+        cache = os.environ.get("TRIVY_CACHE_DIR")
+        cache_args = ["-v", f"{cache}:/root/.cache"] if cache else []
+        cmd = ["docker", "run", "--rm", "-v", f"{Path(path).resolve()}:/scan:ro", *cache_args, image,
                "fs", "--scanners", "vuln", "--format", "json", "--quiet", "/scan"]
     elif mode == "local":
         cmd = ["trivy", "fs", "--scanners", "vuln", "--format", "json", "--quiet", path]
