@@ -1,0 +1,11 @@
+{
+  "note": "既有的刻意弱點（第 5.2 節）。pr-gate 只擋 PR 新增或惡化的問題，不因一般修改重複擋下這些項目。",
+  "accepted": [
+    {"kind": "secret", "path": "config/db.yml", "rule": "demo-fake-secret"},
+    {"kind": "secret", "path": "services/brand-app/src/config.ts", "rule": "demo-fake-secret"},
+    {"kind": "vuln", "package": "next", "version": "14.1.0"},
+    {"kind": "vuln", "package": "lodash", "version": "4.17.20"},
+    {"kind": "mobile", "rule": "android-debuggable", "path": "services/brand-app/android/app/src/main/AndroidManifest.xml"},
+    {"kind": "iac", "path": "infra/terraform/main.tf"}
+  ]
+}
