@@ -1,0 +1,74 @@
+name: ci
+# 每次 push 到 main：產出 SBOM 與掃描結果、模擬部署並建立 production Deployment、把產物與 manifest 上傳到 Release（第 5.4 節）。
+# 部署範圍只包含清冊中實際走 Pipeline 的服務；不替 internal-tool、marketing-site、NAS 建立部署證據。
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  deployments: write
+
+env:
+  DEPLOY_SERVICES: '["storefront","member-api"]'
+  TRIVY_IMAGE: aquasec/trivy:0.57.1
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom.cdx.json
+          upload-artifact: false
+
+      - name: 以最新漏洞資料庫掃描 SBOM
+        run: |
+          docker run --rm -v "$PWD:/w" "$TRIVY_IMAGE" sbom --format json --output /w/trivy-sbom.json /w/sbom.cdx.json
+          docker run --rm "$TRIVY_IMAGE" version --format json > trivy-version.json
+
+      - name: 模擬部署
+        run: echo "模擬部署 $DEPLOY_SERVICES（Demo 不實際啟動服務）"
+
+      - name: 建立 production Deployment 與 success status
+        id: deploy
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const services = JSON.parse(process.env.DEPLOY_SERVICES);
+            const deployment = await github.rest.repos.createDeployment({
+              owner: context.repo.owner, repo: context.repo.repo,
+              ref: context.sha, environment: 'production',
+              auto_merge: false, required_contexts: [],
+              payload: {service_ids: services, source_sha: context.sha, workflow_run_id: context.runId},
+            });
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner, repo: context.repo.repo,
+              deployment_id: deployment.data.id, state: 'success', auto_inactive: false,
+            });
+            core.setOutput('deployment_id', String(deployment.data.id));
+
+      - name: 產出 manifest
+        env:
+          TARGET_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          DEPLOYMENT_ID: ${{ steps.deploy.outputs.deployment_id }}
+        run: python3 scripts/ci_manifest.py
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: deploy-${{ github.run_id }}-${{ github.run_attempt }}
+          name: deploy-${{ github.run_id }}-${{ github.run_attempt }}
+          body: "CI 部署產物：SBOM、SBOM 掃描結果與 manifest（target_sha ${{ github.sha }}）。"
+          files: |
+            sbom.cdx.json
+            trivy-sbom.json
+            manifest.json
