@@ -121,6 +121,8 @@ def show(rev: str, path: str) -> str:
 
 # ---------------------------------------------------------------- main
 def main() -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
     base, head = os.environ.get("BASE_SHA", ""), os.environ.get("HEAD_SHA", "")
     if not (SHA_RE.match(base) and SHA_RE.match(head)):
         print("pr-gate: BASE_SHA／HEAD_SHA 格式錯誤", file=sys.stderr)
