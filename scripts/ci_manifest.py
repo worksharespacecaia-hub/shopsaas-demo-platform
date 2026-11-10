@@ -28,7 +28,7 @@ def main() -> int:
         trivy = json.loads(Path("trivy-version.json").read_text(encoding="utf-8") or "{}")
     db = trivy.get("VulnerabilityDB") or {}
     sbom = json.loads(Path("sbom.cdx.json").read_text(encoding="utf-8")) if Path("sbom.cdx.json").is_file() else {}
-    syft_tool = next((t for t in (sbom.get("metadata", {}).get("tools", {}).get("components") or [])), {})
+    sbom_tool = next((t for t in (sbom.get("metadata", {}).get("tools", {}).get("components") or [])), {})
     manifest = {
         "schema_version": 1,
         "kind": "ci-release",
@@ -38,7 +38,8 @@ def main() -> int:
         "deployment_id": os.environ.get("DEPLOYMENT_ID"),
         "service_ids": json.loads(os.environ.get("DEPLOY_SERVICES", "[]")),
         "observed_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "tool_version": {"syft": syft_tool.get("version"), "trivy": trivy.get("Version")},
+        "tool_version": {"sbom_generator": sbom_tool.get("name"), "sbom_generator_version": sbom_tool.get("version"),
+                         "trivy": trivy.get("Version")},
         "database_revision": {"trivy_db_updated_at": db.get("UpdatedAt"), "trivy_db_version": db.get("Version")},
         "files": {f: sha256(Path(f)) for f in FILES if Path(f).is_file()},
         "status": "failed" if missing else "ok",
