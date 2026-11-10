@@ -22,17 +22,20 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: anchore/sbom-action@v0
-        with:
-          path: .
-          format: cyclonedx-json
-          output-file: sbom.cdx.json
-          upload-artifact: false
+      # SBOM 與掃描使用同一個固定版本的 Trivy：第三方（syft）SBOM 的根元件類型為 file，Trivy 0.57.1 無法解析。
+      # 三次執行共用同一個快取目錄：漏洞資料庫只下載一次，version 也才讀得到資料庫版本。
+      - name: 產出 SBOM（CycloneDX）
+        run: |
+          mkdir -p "$RUNNER_TEMP/trivy-cache"
+          docker run --rm -v "$PWD:/w" -v "$RUNNER_TEMP/trivy-cache:/cache" "$TRIVY_IMAGE" \
+            fs --cache-dir /cache --format cyclonedx --output /w/sbom.cdx.json /w
 
       - name: 以最新漏洞資料庫掃描 SBOM
         run: |
-          docker run --rm -v "$PWD:/w" "$TRIVY_IMAGE" sbom --format json --output /w/trivy-sbom.json /w/sbom.cdx.json
-          docker run --rm "$TRIVY_IMAGE" version --format json > trivy-version.json
+          docker run --rm -v "$PWD:/w" -v "$RUNNER_TEMP/trivy-cache:/cache" "$TRIVY_IMAGE" \
+            sbom --cache-dir /cache --format json --output /w/trivy-sbom.json /w/sbom.cdx.json
+          docker run --rm -v "$RUNNER_TEMP/trivy-cache:/cache" "$TRIVY_IMAGE" \
+            version --cache-dir /cache --format json > trivy-version.json
 
       - name: 模擬部署
         run: echo "模擬部署 $DEPLOY_SERVICES（Demo 不實際啟動服務）"
